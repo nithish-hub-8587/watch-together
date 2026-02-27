@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WatchTogether</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Watch Together with Friends 🎬</h1>
+    <p>Share your screen and enjoy movies online.</p>
+
+    <div id="room-section">
+    <video id="video" autoplay playsinline style="width: 600px; margin-top:20px; border-radius:10px;"></video>
+    <button id="createBtn">Create Room</button>
+    
+    <br><br>
+    
+    <input type="text" id="roomInput" placeholder="Enter Room ID">
+    <button id="joinBtn">Join Room</button>
+</div>
+
+<h2 id="roomDisplay"></h2>
+<script src="/socket.io/socket.io.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
