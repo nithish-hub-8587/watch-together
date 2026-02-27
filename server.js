@@ -13,8 +13,6 @@ app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "index.html"));
 });
 
-const PORT = process.env.PORT || 3000;
-
 io.on("connection", (socket) => {
 
     socket.on("join-room", (roomID) => {
@@ -22,20 +20,25 @@ io.on("connection", (socket) => {
         socket.to(roomID).emit("user-connected");
     });
 
+    // 🔥 FORWARD OFFER
     socket.on("offer", (offer, roomID) => {
         socket.to(roomID).emit("offer", offer);
     });
 
+    // 🔥 FORWARD ANSWER
     socket.on("answer", (answer, roomID) => {
         socket.to(roomID).emit("answer", answer);
     });
 
+    // 🔥 FORWARD ICE CANDIDATES
     socket.on("ice-candidate", (candidate, roomID) => {
         socket.to(roomID).emit("ice-candidate", candidate);
     });
 
 });
 
+const PORT = process.env.PORT || 3000;
+
 server.listen(PORT, () => {
-    console.log("Server running on port " + PORT);
+    console.log("Server running...");
 });

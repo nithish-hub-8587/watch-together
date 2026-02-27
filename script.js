@@ -1,29 +1,39 @@
 const socket = io();
-const video = document.getElementById("video");
+
+const localVideo = document.getElementById("localVideo");
+const remoteVideo = document.getElementById("remoteVideo");
 
 let localStream;
 let peerConnection;
 let currentRoom;
+let isCreator = false;
 
-function generateRoomID() {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
 const config = {
     iceServers: [
-        { urls: "stun:stun.l.google.com:19302" }
+        {
+            urls: "stun:stun.l.google.com:19302"
+        },
+        {
+            urls: "turn:openrelay.metered.ca:80",
+            username: "openrelayproject",
+            credential: "openrelayproject"
+        }
     ]
 };
-
-// Create Room
+// CREATE ROOM
 createBtn.addEventListener("click", async () => {
-    currentRoom = generateRoomID();
+    isCreator = true;
+
+    currentRoom = Math.random().toString(36).substring(2, 8).toUpperCase();
+
     await startScreenShare();
+
     socket.emit("join-room", currentRoom);
     roomDisplay.innerText = "Created Room: " + currentRoom;
 });
 
-// Join Room
-joinBtn.addEventListener("click", async () => {
+// JOIN ROOM
+joinBtn.addEventListener("click", () => {
     currentRoom = roomInput.value.trim().toUpperCase();
     if (!currentRoom) return alert("Enter Room ID");
 
@@ -31,16 +41,20 @@ joinBtn.addEventListener("click", async () => {
     roomDisplay.innerText = "Joined Room: " + currentRoom;
 });
 
+// START SCREEN SHARE (ONLY CREATOR)
 async function startScreenShare() {
     localStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
         audio: true
     });
 
-    video.srcObject = localStream;
+    localVideo.srcObject = localStream;
 }
 
+// WHEN SECOND USER JOINS
 socket.on("user-connected", async () => {
+    if (!isCreator) return;
+
     createPeerConnection();
 
     localStream.getTracks().forEach(track => {
@@ -53,30 +67,32 @@ socket.on("user-connected", async () => {
     socket.emit("offer", offer, currentRoom);
 });
 
+// RECEIVE OFFER (JOINER)
 socket.on("offer", async (offer) => {
+
+    if (isCreator) return; // 🔥 prevent creator handling offer
+
     createPeerConnection();
 
-    await peerConnection.setRemoteDescription(offer);
-
-    localStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true
-    });
-
-    localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
-    });
+    await peerConnection.setRemoteDescription(
+        new RTCSessionDescription(offer)
+    );
 
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
 
     socket.emit("answer", answer, currentRoom);
 });
-
+// RECEIVE ANSWER (CREATOR)
 socket.on("answer", async (answer) => {
-    await peerConnection.setRemoteDescription(answer);
-});
 
+    if (!isCreator) return; // 🔥 only creator handles answer
+
+    await peerConnection.setRemoteDescription(
+        new RTCSessionDescription(answer)
+    );
+});
+// ICE
 socket.on("ice-candidate", async (candidate) => {
     if (peerConnection) {
         await peerConnection.addIceCandidate(candidate);
@@ -84,6 +100,11 @@ socket.on("ice-candidate", async (candidate) => {
 });
 
 function createPeerConnection() {
+
+    if (peerConnection) {
+        peerConnection.close();
+    }
+
     peerConnection = new RTCPeerConnection(config);
 
     peerConnection.onicecandidate = (event) => {
@@ -93,6 +114,8 @@ function createPeerConnection() {
     };
 
     peerConnection.ontrack = (event) => {
-        video.srcObject = event.streams[0];
+        if (!remoteVideo.srcObject) {
+            remoteVideo.srcObject = event.streams[0];
+        }
     };
 }
