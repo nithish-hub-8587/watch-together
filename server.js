@@ -8,12 +8,15 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.static(__dirname));
+
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "index.html"));
 });
+
 const PORT = process.env.PORT || 3000;
 
 io.on("connection", (socket) => {
+
     socket.on("join-room", (roomID) => {
         socket.join(roomID);
         socket.to(roomID).emit("user-connected");
@@ -30,7 +33,9 @@ io.on("connection", (socket) => {
     socket.on("ice-candidate", (candidate, roomID) => {
         socket.to(roomID).emit("ice-candidate", candidate);
     });
+
 });
-server.listen(3000, () => {
-    console.log("Server running at http://localhost:3000");
+
+server.listen(PORT, () => {
+    console.log("Server running on port " + PORT);
 });
