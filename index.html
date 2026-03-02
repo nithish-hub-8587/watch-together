@@ -1,26 +1,95 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>WatchTogether</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Screen Share Room</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script defer src="script.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: white;
+            text-align: center;
+        }
+
+        h1 {
+            margin-top: 20px;
+        }
+
+        .container {
+            margin-top: 30px;
+        }
+
+        input {
+            padding: 10px;
+            width: 200px;
+            border-radius: 6px;
+            border: none;
+            margin-right: 10px;
+        }
+
+        button {
+            padding: 10px 15px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .create-btn {
+            background: #22c55e;
+            color: white;
+        }
+
+        .join-btn {
+            background: #3b82f6;
+            color: white;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        #roomDisplay {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        .videos {
+            margin-top: 30px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        video {
+            width: 45%;
+            border-radius: 10px;
+            border: 2px solid #334155;
+        }
+    </style>
 </head>
+
 <body>
-    <h1>Watch Together with Friends 🎬</h1>
-    <p>Share your screen and enjoy movies online.</p>
 
-    <div id="room-section">
-    <video id="localVideo" autoplay muted playsinline></video>
-    <video id="remoteVideo" autoplay playsinline></video>
-    <button id="createBtn">Create Room</button>
-    
-    <br><br>
-    
-    <input type="text" id="roomInput" placeholder="Enter Room ID">
-    <button id="joinBtn">Join Room</button>
-</div>
+    <h1>🚀 Live Screen Share</h1>
 
-<h2 id="roomDisplay"></h2>
-<script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
+    <div class="container">
+        <button id="createBtn" class="create-btn">Create Room</button>
+        <br><br>
+        <input id="roomInput" placeholder="Enter Room ID" />
+        <button id="joinBtn" class="join-btn">Join Room</button>
+
+        <div id="roomDisplay"></div>
+    </div>
+
+    <div class="videos">
+        <video id="localVideo" autoplay muted></video>
+        <video id="remoteVideo" autoplay></video>
+    </div>
+
 </body>
 </html>
