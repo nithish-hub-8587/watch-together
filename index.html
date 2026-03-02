@@ -1,41 +1,46 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Screen Share Room</title>
+    <title>Live Screen Share</title>
     <script src="/socket.io/socket.io.js"></script>
     <script defer src="script.js"></script>
 
     <style>
         body {
             margin: 0;
-            font-family: Arial, sans-serif;
-            background: #0f172a;
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f172a, #1e293b);
             color: white;
             text-align: center;
+            overflow-x: hidden;
         }
 
         h1 {
             margin-top: 20px;
+            font-size: 32px;
+            animation: fadeDown 1s ease;
         }
 
-        .container {
-            margin-top: 30px;
+        .controls {
+            margin-top: 20px;
+            animation: fadeUp 1s ease;
         }
 
         input {
             padding: 10px;
-            width: 200px;
-            border-radius: 6px;
+            border-radius: 8px;
             border: none;
+            width: 200px;
             margin-right: 10px;
         }
 
         button {
-            padding: 10px 15px;
-            border-radius: 6px;
+            padding: 10px 18px;
+            border-radius: 8px;
             border: none;
             cursor: pointer;
             font-weight: bold;
+            transition: all 0.3s ease;
         }
 
         .create-btn {
@@ -48,13 +53,21 @@
             color: white;
         }
 
+        .fullscreen-btn {
+            background: #f59e0b;
+            color: white;
+            margin-top: 10px;
+        }
+
         button:hover {
-            opacity: 0.9;
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255,255,255,0.3);
         }
 
         #roomDisplay {
             margin-top: 15px;
             font-weight: bold;
+            opacity: 0.8;
         }
 
         .videos {
@@ -63,13 +76,31 @@
             justify-content: center;
             gap: 20px;
             flex-wrap: wrap;
+            animation: fadeUp 1.2s ease;
         }
 
         video {
             width: 45%;
-            border-radius: 10px;
-            border: 2px solid #334155;
+            border-radius: 15px;
+            border: 2px solid rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease;
         }
+
+        video:hover {
+            transform: scale(1.02);
+        }
+
+        @keyframes fadeDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
     </style>
 </head>
 
@@ -77,11 +108,13 @@
 
     <h1>🚀 Live Screen Share</h1>
 
-    <div class="container">
+    <div class="controls">
         <button id="createBtn" class="create-btn">Create Room</button>
         <br><br>
         <input id="roomInput" placeholder="Enter Room ID" />
         <button id="joinBtn" class="join-btn">Join Room</button>
+        <br>
+        <button id="fullscreenBtn" class="fullscreen-btn">Toggle Full Screen</button>
 
         <div id="roomDisplay"></div>
     </div>

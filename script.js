@@ -7,6 +7,17 @@ let localStream;
 let peerConnection;
 let currentRoom;
 let isCreator = false;
+const fullscreenBtn = document.getElementById("fullscreenBtn");
+
+fullscreenBtn.addEventListener("click", () => {
+    const remoteVideo = document.getElementById("remoteVideo");
+
+    if (!document.fullscreenElement) {
+        remoteVideo.requestFullscreen();
+    } else {
+        document.exitFullscreen();
+    }
+});
 
 const config = {
     iceServers: [
