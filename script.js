@@ -84,7 +84,13 @@ socket.on("user-connected", async () => {
 // RECEIVE OFFER (JOINER)
 socket.on("offer", async (offer) => {
 
-    if (isCreator) return; // 🔥 prevent creator handling offer
+    if (isCreator) return;
+
+    if (peerConnection && peerConnection.signalingState !== "stable") {
+        console.log("Resetting peer connection...");
+        peerConnection.close();
+        peerConnection = null;
+    }
 
     createPeerConnection();
 
@@ -100,17 +106,39 @@ socket.on("offer", async (offer) => {
 // RECEIVE ANSWER (CREATOR)
 socket.on("answer", async (answer) => {
 
-    if (!isCreator) return; // 🔥 only creator handles answer
+    if (!isCreator) return;
+
+    if (!peerConnection) return;
+
+    if (peerConnection.signalingState !== "have-local-offer") {
+        console.log("Ignoring duplicate answer");
+        return;
+    }
 
     await peerConnection.setRemoteDescription(
         new RTCSessionDescription(answer)
     );
 });
 // ICE
-socket.on("ice-candidate", async (candidate) => {
+socket.on("user-connected", async () => {
+
+    if (!isCreator) return;
+
     if (peerConnection) {
-        await peerConnection.addIceCandidate(candidate);
+        console.log("Offer already sent");
+        return;
     }
+
+    createPeerConnection();
+
+    localStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, localStream);
+    });
+
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+
+    socket.emit("offer", offer, currentRoom);
 });
 function createPeerConnection() {
 
