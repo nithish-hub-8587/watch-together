@@ -22,8 +22,14 @@ const config = {
 };
 // CREATE ROOM
 createBtn.addEventListener("click", async () => {
-    isCreator = true;
 
+    remoteVideo.srcObject = null;
+
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+    }
+
+    isCreator = true;
     currentRoom = Math.random().toString(36).substring(2, 8).toUpperCase();
 
     await startScreenShare();
@@ -34,6 +40,14 @@ createBtn.addEventListener("click", async () => {
 
 // JOIN ROOM
 joinBtn.addEventListener("click", () => {
+
+    remoteVideo.srcObject = null;
+
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+
     currentRoom = roomInput.value.trim().toUpperCase();
     if (!currentRoom) return alert("Enter Room ID");
 
@@ -98,11 +112,13 @@ socket.on("ice-candidate", async (candidate) => {
         await peerConnection.addIceCandidate(candidate);
     }
 });
-
 function createPeerConnection() {
 
     if (peerConnection) {
+        peerConnection.ontrack = null;
+        peerConnection.onicecandidate = null;
         peerConnection.close();
+        peerConnection = null;
     }
 
     peerConnection = new RTCPeerConnection(config);
@@ -114,8 +130,16 @@ function createPeerConnection() {
     };
 
     peerConnection.ontrack = (event) => {
-        if (!remoteVideo.srcObject) {
-            remoteVideo.srcObject = event.streams[0];
+        remoteVideo.srcObject = event.streams[0];
+    };
+
+    peerConnection.onconnectionstatechange = () => {
+        console.log("Connection State:", peerConnection.connectionState);
+
+        if (peerConnection.connectionState === "disconnected" ||
+            peerConnection.connectionState === "failed") {
+
+            remoteVideo.srcObject = null;
         }
     };
 }
