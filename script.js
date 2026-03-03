@@ -2,16 +2,16 @@ const socket = io();
 
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
+const fullscreenBtn = document.getElementById("fullscreenBtn");
 
 let localStream;
 let peerConnection;
 let currentRoom;
 let isCreator = false;
-const fullscreenBtn = document.getElementById("fullscreenBtn");
+let offerSent = false;
 
+// FULLSCREEN
 fullscreenBtn.addEventListener("click", () => {
-    const remoteVideo = document.getElementById("remoteVideo");
-
     if (!document.fullscreenElement) {
         remoteVideo.requestFullscreen();
     } else {
@@ -21,9 +21,7 @@ fullscreenBtn.addEventListener("click", () => {
 
 const config = {
     iceServers: [
-        {
-            urls: "stun:stun.l.google.com:19302"
-        },
+        { urls: "stun:stun.l.google.com:19302" },
         {
             urls: "turn:openrelay.metered.ca:80",
             username: "openrelayproject",
@@ -31,16 +29,20 @@ const config = {
         }
     ]
 };
-// CREATE ROOM
+
+
+
+// ================= CREATE ROOM =================
 createBtn.addEventListener("click", async () => {
 
     remoteVideo.srcObject = null;
+    offerSent = false;
+    isCreator = true;
 
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
     }
 
-    isCreator = true;
     currentRoom = Math.random().toString(36).substring(2, 8).toUpperCase();
 
     await startScreenShare();
@@ -49,10 +51,13 @@ createBtn.addEventListener("click", async () => {
     roomDisplay.innerText = "Created Room: " + currentRoom;
 });
 
-// JOIN ROOM
+
+
+// ================= JOIN ROOM =================
 joinBtn.addEventListener("click", () => {
 
     remoteVideo.srcObject = null;
+    isCreator = false;
 
     if (peerConnection) {
         peerConnection.close();
@@ -66,15 +71,9 @@ joinBtn.addEventListener("click", () => {
     roomDisplay.innerText = "Joined Room: " + currentRoom;
 });
 
-// START SCREEN SHARE (ONLY CREATOR)
-async function startScreenShare() {
-    localStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true
-    });
 
-    localVideo.srcObject = localStream;
-}
+
+// ================= START SCREEN SHARE =================
 async function startScreenShare() {
 
     const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
@@ -94,9 +93,12 @@ async function startScreenShare() {
     localVideo.srcObject = localStream;
 }
 
-// WHEN SECOND USER JOINS
+
+
+// ================= WHEN JOINER CONNECTS =================
 socket.on("user-connected", async () => {
-    if (!isCreator) return;
+
+    if (!isCreator || offerSent) return;
 
     createPeerConnection();
 
@@ -108,18 +110,16 @@ socket.on("user-connected", async () => {
     await peerConnection.setLocalDescription(offer);
 
     socket.emit("offer", offer, currentRoom);
+
+    offerSent = true;
 });
 
-// RECEIVE OFFER (JOINER)
+
+
+// ================= RECEIVE OFFER =================
 socket.on("offer", async (offer) => {
 
     if (isCreator) return;
-
-    if (peerConnection && peerConnection.signalingState !== "stable") {
-        console.log("Resetting peer connection...");
-        peerConnection.close();
-        peerConnection = null;
-    }
 
     createPeerConnection();
 
@@ -132,12 +132,13 @@ socket.on("offer", async (offer) => {
 
     socket.emit("answer", answer, currentRoom);
 });
-// RECEIVE ANSWER (CREATOR)
+
+
+
+// ================= RECEIVE ANSWER =================
 socket.on("answer", async (answer) => {
 
-    if (!isCreator) return;
-
-    if (!peerConnection) return;
+    if (!isCreator || !peerConnection) return;
 
     if (peerConnection.signalingState !== "have-local-offer") {
         console.log("Ignoring duplicate answer");
@@ -148,32 +149,28 @@ socket.on("answer", async (answer) => {
         new RTCSessionDescription(answer)
     );
 });
-// ICE
-socket.on("user-connected", async () => {
 
-    if (!isCreator) return;
+
+
+// ================= ICE CANDIDATES =================
+socket.on("ice-candidate", async (candidate) => {
 
     if (peerConnection) {
-        console.log("Offer already sent");
-        return;
+        try {
+            await peerConnection.addIceCandidate(
+                new RTCIceCandidate(candidate)
+            );
+        } catch (e) {
+            console.error("Error adding ICE candidate", e);
+        }
     }
-
-    createPeerConnection();
-
-    localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
-    });
-
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
-
-    socket.emit("offer", offer, currentRoom);
 });
+
+
+
 function createPeerConnection() {
 
     if (peerConnection) {
-        peerConnection.ontrack = null;
-        peerConnection.onicecandidate = null;
         peerConnection.close();
         peerConnection = null;
     }
@@ -193,9 +190,10 @@ function createPeerConnection() {
     peerConnection.onconnectionstatechange = () => {
         console.log("Connection State:", peerConnection.connectionState);
 
-        if (peerConnection.connectionState === "disconnected" ||
-            peerConnection.connectionState === "failed") {
-
+        if (
+            peerConnection.connectionState === "disconnected" ||
+            peerConnection.connectionState === "failed"
+        ) {
             remoteVideo.srcObject = null;
         }
     };
