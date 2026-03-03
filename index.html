@@ -4,6 +4,7 @@
     <title>Live Screen Share</title>
     <script src="/socket.io/socket.io.js"></script>
     <script defer src="script.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
 
     <style>
         body {
@@ -100,6 +101,12 @@
             from { opacity: 0; transform: translateY(30px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        #tsparticles {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+}
 
     </style>
 </head>
@@ -120,9 +127,10 @@
     </div>
 
     <div class="videos">
-        <video id="localVideo" autoplay muted></video>
-        <video id="remoteVideo" autoplay></video>
+        <video id="localVideo" autoplay muted playsinline></video>
+        <video id="remoteVideo" autoplay playsinline></video>
     </div>
+    <div id="tsparticles"></div>
 
 
 
@@ -138,3 +146,23 @@
 
 </body>
 </html>
+<script>
+tsParticles.load("tsparticles", {
+    particles: {
+        number: { value: 80 },
+        size: { value: 3 },
+        move: { enable: true, speed: 1 },
+        links: {
+            enable: true,
+            distance: 150,
+            color: "#ffffff",
+            opacity: 0.2,
+            width: 1
+        },
+        color: { value: "#ffffff" }
+    },
+    background: {
+        color: "transparent"
+    }
+});
+</script>

@@ -75,6 +75,24 @@ async function startScreenShare() {
 
     localVideo.srcObject = localStream;
 }
+async function startScreenShare() {
+
+    const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+
+    if (isMobile) {
+        localStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true
+        });
+    } else {
+        localStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true
+        });
+    }
+
+    localVideo.srcObject = localStream;
+}
 
 // WHEN SECOND USER JOINS
 socket.on("user-connected", async () => {
