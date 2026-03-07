@@ -22,15 +22,20 @@ fullscreenBtn.addEventListener("click", () => {
 const config = {
     iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
+
         {
             urls: "turn:openrelay.metered.ca:80",
+            username: "openrelayproject",
+            credential: "openrelayproject"
+        },
+
+        {
+            urls: "turn:openrelay.metered.ca:443",
             username: "openrelayproject",
             credential: "openrelayproject"
         }
     ]
 };
-
-
 
 // ================= CREATE ROOM =================
 createBtn.addEventListener("click", async () => {
@@ -184,7 +189,12 @@ function createPeerConnection() {
     };
 
     peerConnection.ontrack = (event) => {
+    console.log("Receiving stream");
+
+    if (!remoteVideo.srcObject) {
         remoteVideo.srcObject = event.streams[0];
+
+        }
     };
 
     peerConnection.onconnectionstatechange = () => {
