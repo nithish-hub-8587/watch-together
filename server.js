@@ -42,3 +42,26 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log("Server running...");
 });
+socket.on("video-play", (roomID) => {
+    socket.to(roomID).emit("video-play");
+});
+
+socket.on("video-pause", (roomID) => {
+    socket.to(roomID).emit("video-pause");
+});
+const rooms = {};
+
+socket.on("join-room", (roomID) => {
+
+    socket.join(roomID);
+
+    if (!rooms[roomID]) rooms[roomID] = 0;
+    rooms[roomID]++;
+
+    io.to(roomID).emit("viewer-count", rooms[roomID]);
+
+    socket.on("disconnect", () => {
+        rooms[roomID]--;
+        io.to(roomID).emit("viewer-count", rooms[roomID]);
+    });
+});

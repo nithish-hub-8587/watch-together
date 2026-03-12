@@ -131,6 +131,10 @@
         <video id="remoteVideo" autoplay playsinline></video>
     </div>
     <div id="tsparticles"></div>
+    <div id="viewerCount">Viewers: 1</div>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
+    <div id="particles-js"></div>
+
 
 
 
@@ -164,5 +168,13 @@ tsParticles.load("tsparticles", {
     background: {
         color: "transparent"
     }
+});
+particlesJS("particles-js", {
+  particles: {
+    number: { value: 80 },
+    size: { value: 3 },
+    move: { speed: 2 },
+    line_linked: { enable: true }
+  }
 });
 </script>

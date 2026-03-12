@@ -3,6 +3,12 @@ const socket = io();
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 const fullscreenBtn = document.getElementById("fullscreenBtn");
+const urlParams = new URLSearchParams(window.location.search);
+const autoRoom = urlParams.get("room");
+
+if (autoRoom) {
+    roomInput.value = autoRoom;
+}
 
 let localStream;
 let peerConnection;
@@ -12,11 +18,13 @@ let offerSent = false;
 
 // FULLSCREEN
 fullscreenBtn.addEventListener("click", () => {
+
     if (!document.fullscreenElement) {
-        remoteVideo.requestFullscreen();
+        document.documentElement.requestFullscreen();
     } else {
         document.exitFullscreen();
     }
+
 });
 
 const config = {
@@ -47,20 +55,20 @@ const config = {
 // ================= CREATE ROOM =================
 createBtn.addEventListener("click", async () => {
 
-    remoteVideo.srcObject = null;
-    offerSent = false;
     isCreator = true;
-
-    if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-    }
 
     currentRoom = Math.random().toString(36).substring(2, 8).toUpperCase();
 
     await startScreenShare();
 
     socket.emit("join-room", currentRoom);
-    roomDisplay.innerText = "Created Room: " + currentRoom;
+
+    const roomLink = window.location.origin + "?room=" + currentRoom;
+
+    roomDisplay.innerHTML = `
+        Room ID: ${currentRoom} <br>
+        Share Link: <input value="${roomLink}" id="roomLink" readonly>
+    `;
 });
 
 
@@ -215,3 +223,22 @@ function createPeerConnection() {
         }
     };
 }
+remoteVideo.addEventListener("play", () => {
+    socket.emit("video-play", currentRoom);
+});
+
+remoteVideo.addEventListener("pause", () => {
+    socket.emit("video-pause", currentRoom);
+});
+
+socket.on("video-play", () => {
+    remoteVideo.play();
+});
+
+socket.on("video-pause", () => {
+    remoteVideo.pause();
+});
+socket.on("viewer-count", (count) => {
+    document.getElementById("viewerCount").innerText =
+        "Viewers: " + count;
+});
