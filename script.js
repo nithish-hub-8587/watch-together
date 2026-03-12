@@ -20,7 +20,12 @@ let offerSent = false;
 fullscreenBtn.addEventListener("click", () => {
 
     if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
+
+        remoteVideo.requestFullscreen()
+        .catch(err => {
+            console.log("Fullscreen error:", err);
+        });
+
     } else {
         document.exitFullscreen();
     }
@@ -100,19 +105,34 @@ async function startScreenShare() {
 
     if (isMobile) {
         localStream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                frameRate: { ideal: 30 }
+            },
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            }
         });
     } else {
         localStream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
-            audio: true
+            video: {
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+                frameRate: { ideal: 30 }
+            },
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            }
         });
     }
 
     localVideo.srcObject = localStream;
 }
-
 
 
 // ================= WHEN JOINER CONNECTS =================
