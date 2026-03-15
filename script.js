@@ -145,6 +145,7 @@ socket.on("user-connected", async () => {
     localStream.getTracks().forEach(track => {
         peerConnection.addTrack(track, localStream);
     });
+    optimizeVideoQuality();
 
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
@@ -231,6 +232,8 @@ function createPeerConnection() {
 
         }
     };
+    createPeerConnection();
+monitorConnection();
 
     peerConnection.onconnectionstatechange = () => {
         console.log("Connection State:", peerConnection.connectionState);
@@ -242,6 +245,21 @@ function createPeerConnection() {
             remoteVideo.srcObject = null;
         }
     };
+    peerConnection.getSenders().forEach(sender => {
+
+    if (sender.track && sender.track.kind === "video") {
+
+        const params = sender.getParameters();
+
+        if (!params.encodings) {
+            params.encodings = [{}];
+        }
+
+        params.encodings[0].maxBitrate = 2500000;
+
+        sender.setParameters(params);
+    }
+});
 }
 remoteVideo.addEventListener("play", () => {
     socket.emit("video-play", currentRoom);
@@ -262,3 +280,87 @@ socket.on("viewer-count", (count) => {
     document.getElementById("viewerCount").innerText =
         "Viewers: " + count;
 });
+function optimizeVideoQuality() {
+
+    const sender = peerConnection.getSenders().find(s =>
+        s.track && s.track.kind === "video"
+    );
+
+    if (!sender) return;
+
+    const params = sender.getParameters();
+
+    if (!params.encodings) {
+        params.encodings = [{}];
+    }
+
+    params.encodings[0].maxBitrate = 1500000; // 1.5 Mbps
+    params.encodings[0].scaleResolutionDownBy = 1;
+
+    sender.setParameters(params);
+}
+function monitorConnection() {
+
+    setInterval(async () => {
+
+        if (!peerConnection) return;
+
+        const stats = await peerConnection.getStats();
+
+        stats.forEach(report => {
+
+            if (report.type === "outbound-rtp" && report.kind === "video") {
+
+                const bitrate = report.bytesSent;
+
+                console.log("Video bytes sent:", bitrate);
+
+                if (bitrate < 500000) {
+                    lowerQuality();
+                } else {
+                    increaseQuality();
+                }
+
+            }
+
+        });
+
+    }, 5000);
+}
+function lowerQuality() {
+
+    const sender = peerConnection.getSenders().find(s =>
+        s.track && s.track.kind === "video"
+    );
+
+    if (!sender) return;
+
+    const params = sender.getParameters();
+
+    params.encodings[0].maxBitrate = 500000; // 0.5 Mbps
+    params.encodings[0].scaleResolutionDownBy = 2;
+
+    sender.setParameters(params);
+
+    console.log("Lowering video quality");
+
+}
+
+function increaseQuality() {
+
+    const sender = peerConnection.getSenders().find(s =>
+        s.track && s.track.kind === "video"
+    );
+
+    if (!sender) return;
+
+    const params = sender.getParameters();
+
+    params.encodings[0].maxBitrate = 2000000; // 2 Mbps
+    params.encodings[0].scaleResolutionDownBy = 1;
+
+    sender.setParameters(params);
+
+    console.log("Increasing video quality");
+
+}
