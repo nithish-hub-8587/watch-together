@@ -5,9 +5,14 @@ const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
 
-const rooms = {};
+// IMPORTANT: enable CORS
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
 
 app.use(express.static(__dirname));
 
@@ -15,23 +20,33 @@ app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "index.html"));
 });
 
+// ================= SOCKET =================
+
+const rooms = {};
+
 io.on("connection", (socket) => {
 
-    // JOIN ROOM
+    console.log("User connected:", socket.id);
+
     socket.on("join-room", (roomID) => {
 
         socket.join(roomID);
-        socket.to(roomID).emit("user-connected");
 
         if (!rooms[roomID]) rooms[roomID] = 0;
         rooms[roomID]++;
 
         io.to(roomID).emit("viewer-count", rooms[roomID]);
 
+        socket.to(roomID).emit("user-connected");
+
         socket.on("disconnect", () => {
+
             rooms[roomID]--;
+
             io.to(roomID).emit("viewer-count", rooms[roomID]);
+
         });
+
     });
 
     // OFFER
@@ -60,8 +75,10 @@ io.on("connection", (socket) => {
 
 });
 
+// ================= PORT =================
+
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
-    console.log("Server running...");
+    console.log("Server running on port", PORT);
 });
