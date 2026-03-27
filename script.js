@@ -145,11 +145,6 @@ function addChatMessage(sender, message) {
 async function startScreenShare() {
     const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
 
-    if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-        localStream = null;
-    }
-
     if (isMobile) {
         localStream = await navigator.mediaDevices.getUserMedia({
             video: {
@@ -158,9 +153,11 @@ async function startScreenShare() {
                 frameRate: { ideal: 24 }
             },
             audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+                channelCount: 2,
+                sampleRate: 48000
             }
         });
     } else {
@@ -170,7 +167,13 @@ async function startScreenShare() {
                 height: { ideal: 1080 },
                 frameRate: { ideal: 30 }
             },
-            audio: true
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+                channelCount: 2,
+                sampleRate: 48000
+            }
         });
     }
 
@@ -206,6 +209,7 @@ socket.on("viewer-joined", async (viewerId) => {
     });
 
     optimizeVideoQuality(viewerId);
+    optimizeAudioQuality(viewerId);
     startAdaptiveQuality(viewerId);
 
     const offer = await pc.createOffer();
@@ -383,4 +387,24 @@ function cleanupAllConnections() {
 
 function generateRoomID() {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+function optimizeAudioQuality(peerId) {
+    const pc = peerConnections[peerId];
+    if (!pc) return;
+
+    const sender = pc.getSenders().find(
+        s => s.track && s.track.kind === "audio"
+    );
+
+    if (!sender) return;
+
+    const params = sender.getParameters();
+
+    if (!params.encodings) {
+        params.encodings = [{}];
+    }
+
+    params.encodings[0].maxBitrate = 128000; // 128 kbps
+
+    sender.setParameters(params).catch(console.error);
 }
