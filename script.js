@@ -1,38 +1,33 @@
 const socket = io();
 
+const createBtn = document.getElementById("createBtn");
+const joinBtn = document.getElementById("joinBtn");
+const roomInput = document.getElementById("roomInput");
+const roomDisplay = document.getElementById("roomDisplay");
+const viewerCount = document.getElementById("viewerCount");
+
 const localVideo = document.getElementById("localVideo");
 const remoteVideo = document.getElementById("remoteVideo");
 const fullscreenBtn = document.getElementById("fullscreenBtn");
 
+const chatInput = document.getElementById("chatInput");
+const sendChatBtn = document.getElementById("sendChatBtn");
+const chatBox = document.getElementById("chatBox");
+
 const urlParams = new URLSearchParams(window.location.search);
 const autoRoom = urlParams.get("room");
-
 if (autoRoom) {
     roomInput.value = autoRoom;
 }
 
-let localStream;
-let peerConnection;
-let currentRoom;
+let localStream = null;
+let currentRoom = "";
 let isCreator = false;
-let offerSent = false;
-let monitorStarted = false;
+let creatorId = null;
 
-// ================= FULLSCREEN =================
-
-fullscreenBtn.addEventListener("click", () => {
-
-    if (!document.fullscreenElement) {
-        remoteVideo.requestFullscreen().catch(err => {
-            console.log("Fullscreen error:", err);
-        });
-    } else {
-        document.exitFullscreen();
-    }
-
-});
-
-// ================= ICE SERVERS =================
+const peerConnections = {};
+const qualityIntervals = {};
+const qualityStats = {};
 
 const config = {
     iceServers: [
@@ -56,304 +51,336 @@ const config = {
     ]
 };
 
-// ================= CREATE ROOM =================
-
-createBtn.addEventListener("click", async () => {
-
-    isCreator = true;
-
-    currentRoom = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-    await startScreenShare();
-
-    socket.emit("join-room", currentRoom);
-
-    const roomLink = window.location.origin + "?room=" + currentRoom;
-
-    roomDisplay.innerHTML = `
-        Room ID: ${currentRoom} <br>
-        Share Link: <input value="${roomLink}" readonly>
-    `;
+// ================= FULLSCREEN =================
+fullscreenBtn.addEventListener("click", () => {
+    if (!document.fullscreenElement) {
+        remoteVideo.requestFullscreen().catch(err => {
+            console.log("Fullscreen error:", err);
+        });
+    } else {
+        document.exitFullscreen();
+    }
 });
 
-// ================= JOIN ROOM =================
+// ================= ROOM CREATE =================
+createBtn.addEventListener("click", async () => {
+    try {
+        cleanupAllConnections();
 
+        isCreator = true;
+        currentRoom = generateRoomID();
+
+        await startScreenShare();
+
+        socket.emit("join-room", {
+            roomID: currentRoom,
+            isCreator: true
+        });
+
+        const roomLink = `${window.location.origin}?room=${currentRoom}`;
+
+        roomDisplay.innerHTML = `
+            <div><strong>Room ID:</strong> ${currentRoom}</div>
+            <div style="margin-top:8px;">
+                <input value="${roomLink}" readonly id="roomLink" />
+            </div>
+        `;
+    } catch (err) {
+        console.error("Create room error:", err);
+        alert("Could not start screen sharing.");
+    }
+});
+
+// ================= ROOM JOIN =================
 joinBtn.addEventListener("click", () => {
+    cleanupAllConnections();
 
-    remoteVideo.srcObject = null;
     isCreator = false;
+    currentRoom = roomInput.value.trim().toUpperCase();
 
-    if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
+    if (!currentRoom) {
+        alert("Enter Room ID");
+        return;
     }
 
-    currentRoom = roomInput.value.trim().toUpperCase();
-    if (!currentRoom) return alert("Enter Room ID");
-
-    socket.emit("join-room", currentRoom);
+    socket.emit("join-room", {
+        roomID: currentRoom,
+        isCreator: false
+    });
 
     roomDisplay.innerText = "Joined Room: " + currentRoom;
 });
 
-// ================= SCREEN SHARE =================
+// ================= CHAT =================
+sendChatBtn.addEventListener("click", sendChatMessage);
+chatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendChatMessage();
+});
 
+function sendChatMessage() {
+    const message = chatInput.value.trim();
+    if (!message || !currentRoom) return;
+
+    const sender = isCreator ? "Host" : "Viewer";
+
+    socket.emit("chat-message", {
+        roomID: currentRoom,
+        message,
+        sender
+    });
+
+    addChatMessage(sender, message);
+    chatInput.value = "";
+}
+
+function addChatMessage(sender, message) {
+    const div = document.createElement("div");
+    div.className = "chat-message";
+    div.innerHTML = `<strong>${sender}:</strong> ${message}`;
+    chatBox.appendChild(div);
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+// ================= SCREEN SHARE / MOBILE CAMERA =================
 async function startScreenShare() {
-
     const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
 
-    if (isMobile) {
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
 
+    if (isMobile) {
         localStream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                frameRate: { ideal: 24 }
+            },
             audio: {
                 echoCancellation: true,
-                noiseSuppression: true
+                noiseSuppression: true,
+                autoGainControl: true
             }
         });
-
     } else {
-
         localStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+            video: {
+                width: { ideal: 1920 },
+                height: { ideal: 1080 },
+                frameRate: { ideal: 30 }
+            },
             audio: true
         });
-
     }
 
     localVideo.srcObject = localStream;
 }
 
-// ================= USER CONNECTED =================
+// ================= SOCKET EVENTS =================
+socket.on("joined-room", ({ roomID, creatorId: serverCreatorId }) => {
+    creatorId = serverCreatorId;
+    console.log("Joined room:", roomID, "creator:", creatorId);
+});
 
-socket.on("user-connected", async () => {
+socket.on("viewer-count", (count) => {
+    viewerCount.innerText = "Viewers: " + count;
+});
 
-    if (!isCreator || offerSent) return;
+socket.on("chat-message", ({ sender, message }) => {
+    addChatMessage(sender, message);
+});
 
-    createPeerConnection();
+socket.on("creator-left", () => {
+    alert("Host left the room.");
+    remoteVideo.srcObject = null;
+});
+
+socket.on("viewer-joined", async (viewerId) => {
+    if (!isCreator || !localStream) return;
+
+    const pc = createPeerConnection(viewerId, true);
 
     localStream.getTracks().forEach(track => {
-        peerConnection.addTrack(track, localStream);
+        pc.addTrack(track, localStream);
     });
 
-    optimizeVideoQuality();
+    optimizeVideoQuality(viewerId);
+    startAdaptiveQuality(viewerId);
 
-    if (!monitorStarted) {
-        monitorConnection();
-        monitorStarted = true;
-    }
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
 
-    const offer = await peerConnection.createOffer();
-
-    await peerConnection.setLocalDescription(offer);
-
-    socket.emit("offer", offer, currentRoom);
-
-    offerSent = true;
+    socket.emit("offer", offer, viewerId);
 });
 
-// ================= RECEIVE OFFER =================
-
-socket.on("offer", async (offer) => {
-
+socket.on("offer", async (offer, fromId) => {
     if (isCreator) return;
 
-    createPeerConnection();
+    const pc = createPeerConnection(fromId, false);
 
-    await peerConnection.setRemoteDescription(
-        new RTCSessionDescription(offer)
-    );
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
-    const answer = await peerConnection.createAnswer();
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
 
-    await peerConnection.setLocalDescription(answer);
-
-    socket.emit("answer", answer, currentRoom);
+    socket.emit("answer", answer, fromId);
 });
 
-// ================= RECEIVE ANSWER =================
+socket.on("answer", async (answer, fromId) => {
+    const pc = peerConnections[fromId];
+    if (!pc) return;
 
-socket.on("answer", async (answer) => {
-
-    if (!isCreator || !peerConnection) return;
-
-    if (peerConnection.signalingState !== "have-local-offer") {
-        console.log("Ignoring duplicate answer");
+    if (pc.signalingState !== "have-local-offer") {
+        console.log("Ignoring duplicate answer from", fromId);
         return;
     }
 
-    await peerConnection.setRemoteDescription(
-        new RTCSessionDescription(answer)
-    );
+    await pc.setRemoteDescription(new RTCSessionDescription(answer));
 });
 
-// ================= ICE =================
-
-socket.on("ice-candidate", async (candidate) => {
-
-    if (!peerConnection) return;
+socket.on("ice-candidate", async (candidate, fromId) => {
+    const pc = peerConnections[fromId];
+    if (!pc) return;
 
     try {
-        await peerConnection.addIceCandidate(
-            new RTCIceCandidate(candidate)
-        );
-    } catch (e) {
-        console.error("ICE error", e);
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (err) {
+        console.error("ICE candidate error:", err);
     }
-
 });
 
-// ================= CREATE PEER =================
-
-function createPeerConnection() {
-
-    if (peerConnection) {
-        peerConnection.close();
+// ================= PEER CONNECTION =================
+function createPeerConnection(peerId, senderSide) {
+    if (peerConnections[peerId]) {
+        return peerConnections[peerId];
     }
 
-    peerConnection = new RTCPeerConnection(config);
+    const pc = new RTCPeerConnection(config);
+    peerConnections[peerId] = pc;
 
-    peerConnection.onicecandidate = (event) => {
+    pc.onicecandidate = (event) => {
         if (event.candidate) {
-            socket.emit("ice-candidate", event.candidate, currentRoom);
+            socket.emit("ice-candidate", event.candidate, peerId);
         }
     };
 
-    peerConnection.ontrack = (event) => {
+    pc.ontrack = (event) => {
+        console.log("Receiving stream from", peerId);
+        remoteVideo.srcObject = event.streams[0];
+    };
 
-        console.log("Receiving stream");
+    pc.onconnectionstatechange = () => {
+        console.log(`Connection ${peerId}:`, pc.connectionState);
 
-        if (!remoteVideo.srcObject) {
-            remoteVideo.srcObject = event.streams[0];
+        if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+            if (!senderSide) {
+                remoteVideo.srcObject = null;
+            }
+            clearAdaptiveQuality(peerId);
+        }
+
+        if (pc.connectionState === "closed") {
+            clearAdaptiveQuality(peerId);
         }
     };
 
-    peerConnection.onconnectionstatechange = () => {
-
-        console.log("Connection:", peerConnection.connectionState);
-
-        if (
-            peerConnection.connectionState === "disconnected" ||
-            peerConnection.connectionState === "failed"
-        ) {
-            remoteVideo.srcObject = null;
-        }
-    };
+    return pc;
 }
 
-// ================= VIDEO SYNC =================
+// ================= ADAPTIVE VIDEO QUALITY =================
+function optimizeVideoQuality(peerId) {
+    const pc = peerConnections[peerId];
+    if (!pc) return;
 
-remoteVideo.addEventListener("play", () => {
-    socket.emit("video-play", currentRoom);
-});
-
-remoteVideo.addEventListener("pause", () => {
-    socket.emit("video-pause", currentRoom);
-});
-
-socket.on("video-play", () => {
-    remoteVideo.play();
-});
-
-socket.on("video-pause", () => {
-    remoteVideo.pause();
-});
-
-// ================= VIEWERS =================
-
-socket.on("viewer-count", (count) => {
-
-    document.getElementById("viewerCount").innerText =
-        "Viewers: " + count;
-
-});
-
-// ================= OPTIMIZE QUALITY =================
-
-function optimizeVideoQuality() {
-
-    const sender = peerConnection.getSenders().find(
-        s => s.track && s.track.kind === "video"
-    );
-
+    const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
     if (!sender) return;
 
     const params = sender.getParameters();
-
     if (!params.encodings) {
         params.encodings = [{}];
     }
 
     params.encodings[0].maxBitrate = 1500000;
+    params.encodings[0].scaleResolutionDownBy = 1;
 
-    sender.setParameters(params);
+    sender.setParameters(params).catch(console.error);
 }
 
-// ================= MONITOR NETWORK =================
+function startAdaptiveQuality(peerId) {
+    if (qualityIntervals[peerId]) return;
 
-function monitorConnection() {
+    qualityIntervals[peerId] = setInterval(async () => {
+        const pc = peerConnections[peerId];
+        if (!pc) return;
 
-    setInterval(async () => {
+        const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
+        if (!sender) return;
 
-        if (!peerConnection) return;
-
-        const stats = await peerConnection.getStats();
+        const stats = await pc.getStats(sender);
 
         stats.forEach(report => {
-
             if (report.type === "outbound-rtp" && report.kind === "video") {
+                const prev = qualityStats[peerId];
 
-                const bitrate = report.bytesSent / report.timestamp;
+                if (prev) {
+                    const bytes = report.bytesSent - prev.bytesSent;
+                    const time = report.timestamp - prev.timestamp;
+                    const bitrate = (bytes * 8 * 1000) / time;
 
-                if (bitrate < 500000) {
-                    lowerQuality();
-                } else {
-                    increaseQuality();
+                    if (bitrate < 500000) {
+                        setSenderQuality(sender, 500000, 2);
+                        console.log("Lowering quality for", peerId);
+                    } else if (bitrate > 1200000) {
+                        setSenderQuality(sender, 2000000, 1);
+                        console.log("Increasing quality for", peerId);
+                    }
                 }
 
+                qualityStats[peerId] = {
+                    bytesSent: report.bytesSent,
+                    timestamp: report.timestamp
+                };
             }
-
         });
-
     }, 5000);
 }
 
-// ================= LOWER QUALITY =================
+function clearAdaptiveQuality(peerId) {
+    if (qualityIntervals[peerId]) {
+        clearInterval(qualityIntervals[peerId]);
+        delete qualityIntervals[peerId];
+    }
 
-function lowerQuality() {
-
-    const sender = peerConnection.getSenders().find(
-        s => s.track && s.track.kind === "video"
-    );
-
-    if (!sender) return;
-
-    const params = sender.getParameters();
-
-    params.encodings[0].maxBitrate = 500000;
-    params.encodings[0].scaleResolutionDownBy = 2;
-
-    sender.setParameters(params);
-
-    console.log("Lowering quality");
+    if (qualityStats[peerId]) {
+        delete qualityStats[peerId];
+    }
 }
 
-// ================= INCREASE QUALITY =================
-
-function increaseQuality() {
-
-    const sender = peerConnection.getSenders().find(
-        s => s.track && s.track.kind === "video"
-    );
-
-    if (!sender) return;
-
+function setSenderQuality(sender, maxBitrate, scaleResolutionDownBy) {
     const params = sender.getParameters();
+    if (!params.encodings) {
+        params.encodings = [{}];
+    }
 
-    params.encodings[0].maxBitrate = 2000000;
-    params.encodings[0].scaleResolutionDownBy = 1;
+    params.encodings[0].maxBitrate = maxBitrate;
+    params.encodings[0].scaleResolutionDownBy = scaleResolutionDownBy;
 
-    sender.setParameters(params);
+    sender.setParameters(params).catch(console.error);
+}
 
-    console.log("Increasing quality");
+// ================= CLEANUP =================
+function cleanupAllConnections() {
+    Object.keys(peerConnections).forEach(peerId => {
+        clearAdaptiveQuality(peerId);
+        peerConnections[peerId].close();
+        delete peerConnections[peerId];
+    });
+
+    remoteVideo.srcObject = null;
+    creatorId = null;
+}
+
+function generateRoomID() {
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
 }

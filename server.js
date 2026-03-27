@@ -6,7 +6,6 @@ const path = require("path");
 const app = express();
 const server = http.createServer(app);
 
-// IMPORTANT: enable CORS
 const io = new Server(server, {
     cors: {
         origin: "*",
@@ -20,62 +19,79 @@ app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "index.html"));
 });
 
-// ================= SOCKET =================
-
-const rooms = {};
+const roomCreators = {};
+const roomMembers = {};
 
 io.on("connection", (socket) => {
-
     console.log("User connected:", socket.id);
 
-    socket.on("join-room", (roomID) => {
+    socket.on("join-room", ({ roomID, isCreator }) => {
+        socket.data.roomID = roomID;
+        socket.data.isCreator = isCreator;
 
         socket.join(roomID);
 
-        if (!rooms[roomID]) rooms[roomID] = 0;
-        rooms[roomID]++;
+        if (!roomMembers[roomID]) {
+            roomMembers[roomID] = new Set();
+        }
 
-        io.to(roomID).emit("viewer-count", rooms[roomID]);
+        roomMembers[roomID].add(socket.id);
 
-        socket.to(roomID).emit("user-connected");
+        if (isCreator) {
+            roomCreators[roomID] = socket.id;
+        }
 
-        socket.on("disconnect", () => {
+        io.to(roomID).emit("viewer-count", roomMembers[roomID].size);
 
-            rooms[roomID]--;
-
-            io.to(roomID).emit("viewer-count", rooms[roomID]);
-
+        socket.emit("joined-room", {
+            roomID,
+            creatorId: roomCreators[roomID] || null
         });
 
+        if (!isCreator && roomCreators[roomID]) {
+            io.to(roomCreators[roomID]).emit("viewer-joined", socket.id);
+        }
     });
 
-    // OFFER
-    socket.on("offer", (offer, roomID) => {
-        socket.to(roomID).emit("offer", offer);
+    socket.on("offer", (offer, targetId) => {
+        io.to(targetId).emit("offer", offer, socket.id);
     });
 
-    // ANSWER
-    socket.on("answer", (answer, roomID) => {
-        socket.to(roomID).emit("answer", answer);
+    socket.on("answer", (answer, targetId) => {
+        io.to(targetId).emit("answer", answer, socket.id);
     });
 
-    // ICE
-    socket.on("ice-candidate", (candidate, roomID) => {
-        socket.to(roomID).emit("ice-candidate", candidate);
+    socket.on("ice-candidate", (candidate, targetId) => {
+        io.to(targetId).emit("ice-candidate", candidate, socket.id);
     });
 
-    // VIDEO SYNC
-    socket.on("video-play", (roomID) => {
-        socket.to(roomID).emit("video-play");
+    socket.on("chat-message", ({ roomID, message, sender }) => {
+        io.to(roomID).emit("chat-message", { sender, message });
     });
 
-    socket.on("video-pause", (roomID) => {
-        socket.to(roomID).emit("video-pause");
-    });
+    socket.on("disconnect", () => {
+        const roomID = socket.data.roomID;
+        const isCreator = socket.data.isCreator;
 
+        if (!roomID || !roomMembers[roomID]) return;
+
+        roomMembers[roomID].delete(socket.id);
+
+        if (roomMembers[roomID].size === 0) {
+            delete roomMembers[roomID];
+            delete roomCreators[roomID];
+        } else {
+            io.to(roomID).emit("viewer-count", roomMembers[roomID].size);
+
+            if (isCreator) {
+                delete roomCreators[roomID];
+                io.to(roomID).emit("creator-left");
+            }
+        }
+
+        console.log("User disconnected:", socket.id);
+    });
 });
-
-// ================= PORT =================
 
 const PORT = process.env.PORT || 3000;
 

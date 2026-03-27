@@ -1,173 +1,216 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Live Screen Share</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Watch Together Online</title>
+    <link rel="icon" href="data:," />
     <script src="/socket.io/socket.io.js"></script>
-    <script defer src="script.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
-
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             margin: 0;
-            font-family: 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #000000, #000000);
-            color: white;
-            text-align: center;
+            font-family: Arial, sans-serif;
+            background: #000;
+            color: #fff;
             overflow-x: hidden;
         }
 
+        #tsparticles {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+
         h1 {
-            margin-top: 20px;
+            margin-bottom: 20px;
             font-size: 32px;
-            animation: fadeDown 1s ease;
         }
 
-        .controls {
-            margin-top: 20px;
-            animation: fadeUp 1s ease;
+        .top-controls {
+            margin-bottom: 20px;
         }
 
-        input {
-            padding: 10px;
+        input, button {
+            padding: 10px 12px;
             border-radius: 8px;
             border: none;
-            width: 200px;
-            margin-right: 10px;
+            margin: 5px;
         }
 
         button {
-            padding: 10px 18px;
-            border-radius: 8px;
-            border: none;
             cursor: pointer;
             font-weight: bold;
-            transition: all 0.3s ease;
         }
 
-        .create-btn {
-            background: #099b3f;
+        #createBtn {
+            background: #22c55e;
             color: white;
         }
 
-        .join-btn {
-            background: #000000;
+        #joinBtn {
+            background: #2563eb;
             color: white;
         }
 
-        .fullscreen-btn {
+        #fullscreenBtn {
             background: #f59e0b;
             color: white;
-            margin-top: 10px;
-        }
-
-        button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 15px rgba(255,255,255,0.3);
         }
 
         #roomDisplay {
-            margin-top: 15px;
-            font-weight: bold;
-            opacity: 0.8;
+            margin-top: 10px;
+            font-size: 14px;
         }
 
-        .videos {
-            margin-top: 30px;
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            flex-wrap: wrap;
-            animation: fadeUp 1.2s ease;
+        #roomLink {
+            width: 260px;
+            max-width: 100%;
+        }
+
+        .video-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 20px;
         }
 
         video {
-            width: 45%;
-            border-radius: 15px;
-            border: 2px solid rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
-            transition: transform 0.3s ease;
+            width: 100%;
+            min-height: 260px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 12px;
+            object-fit: cover;
         }
 
-        video:hover {
-            transform: scale(1.02);
+        .info-bar {
+            margin-top: 10px;
+            font-size: 14px;
         }
 
-        @keyframes fadeDown {
-            from { opacity: 0; transform: translateY(-30px); }
-            to { opacity: 1; transform: translateY(0); }
+        .chat-container {
+            margin-top: 20px;
+            background: rgba(20, 20, 20, 0.8);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: left;
         }
 
-        @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
+        #chatBox {
+            height: 180px;
+            overflow-y: auto;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: rgba(0, 0, 0, 0.5);
         }
-        #tsparticles {
-    position: fixed;
-    width: 100%;
-    height: 100%;
-    z-index: -1;
-}
 
+        .chat-message {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .chat-controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-controls input {
+            flex: 1;
+        }
+
+        #sendChatBtn {
+            background: #9333ea;
+            color: white;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            opacity: 0.8;
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .video-section {
+                grid-template-columns: 1fr;
+            }
+
+            .chat-controls {
+                flex-direction: column;
+            }
+        }
     </style>
 </head>
-
 <body>
-
-    <h1>WATCH-TOGRTHER ONLINE</h1>
-
-    <div class="controls">
-        <button id="createBtn" class="create-btn">Create Room</button>
-        <br><br>
-        <input id="roomInput" placeholder="Enter Room ID" />
-        <button id="joinBtn" class="join-btn">Join Room</button>
-        <br>
-        <button id="fullscreenBtn" class="fullscreen-btn">Toggle Full Screen</button>
-
-        <div id="roomDisplay"></div>
-    </div>
-
-    <div class="videos">
-        <video id="localVideo" autoplay muted playsinline></video>
-        <video id="remoteVideo" autoplay playsinline></video>
-    </div>
     <div id="tsparticles"></div>
-    <div id="viewerCount">Viewers: 1</div>
-    <script src="https://cdn.jsdelivr.net/npm/particles.js"></script>
-    <div id="particles-js"></div>
 
+    <div class="container">
+        <h1>WATCH-TOGETHER ONLINE</h1>
 
+        <div class="top-controls">
+            <button id="createBtn">Create Room</button><br />
+            <input id="roomInput" placeholder="Enter Room ID" />
+            <button id="joinBtn">Join Room</button><br />
+            <button id="fullscreenBtn">Toggle Full Screen</button>
 
+            <div id="roomDisplay"></div>
+        </div>
 
+        <div class="video-section">
+            <video id="localVideo" autoplay muted playsinline></video>
+            <video id="remoteVideo" autoplay playsinline></video>
+        </div>
 
-    <h2>@2026 build by Nithish</h2>
+        <div class="info-bar">
+            <span id="viewerCount">Viewers: 0</span>
+        </div>
 
+        <div class="chat-container">
+            <h3>Room Chat</h3>
+            <div id="chatBox"></div>
+            <div class="chat-controls">
+                <input id="chatInput" placeholder="Type message..." />
+                <button id="sendChatBtn">Send</button>
+            </div>
+        </div>
+
+        <footer>@2026 build by Nithish</footer>
+    </div>
+
+    <script>
+        tsParticles.load("tsparticles", {
+            particles: {
+                number: { value: 80 },
+                size: { value: 2 },
+                move: { enable: true, speed: 1 },
+                links: {
+                    enable: true,
+                    distance: 120,
+                    color: "#ffffff",
+                    opacity: 0.2,
+                    width: 1
+                },
+                color: { value: "#ffffff" }
+            },
+            background: { color: "transparent" }
+        });
+    </script>
+
+    <script src="script.js"></script>
 </body>
 </html>
-<script>
-tsParticles.load("tsparticles", {
-    particles: {
-        number: { value: 80 },
-        size: { value: 3 },
-        move: { enable: true, speed: 1 },
-        links: {
-            enable: true,
-            distance: 150,
-            color: "#ffffff",
-            opacity: 0.2,
-            width: 1
-        },
-        color: { value: "#ffffff" }
-    },
-    background: {
-        color: "transparent"
-    }
-});
-particlesJS("particles-js", {
-  particles: {
-    number: { value: 80 },
-    size: { value: 3 },
-    move: { speed: 2 },
-    line_linked: { enable: true }
-  }
-});
-</script>
